@@ -1,2 +1,2 @@
 # ala_rpg_hp
-game
+paste the script in the vscode
