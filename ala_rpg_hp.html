@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ALA RPG - Mobile God</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&display=swap');
+
+        * {
+            touch-action: none; /* Mencegah zoom/scroll saat main */
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #050510;
+            color: white;
+            font-family: 'Orbitron', sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #game-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            background: radial-gradient(circle, #1a1a3a 0%, #050510 100%);
+            display: block;
+            width: 100%;
+            height: 60%; /* Area game di atas */
+        }
+
+        /* --- UI OVERLAY --- */
+        .hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            pointer-events: none;
+        }
+
+        .status-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        
+        .bar-wrap { width: 120px; height: 12px; background: rgba(255,255,255,0.1); border: 1px solid #555; margin-top: 4px; border-radius: 10px; overflow: hidden; }
+        .bar-hp { height: 100%; background: linear-gradient(90deg, #ff416c, #ff4b2b); width: 100%; transition: 0.3s; }
+        .bar-xp { height: 100%; background: linear-gradient(90deg, #00f2fe, #4facfe); width: 0%; transition: 0.3s; }
+        .bar-god { height: 100%; background: linear-gradient(90deg, #f83600, #f9d423); width: 0%; box-shadow: 0 0 10px gold; }
+
+        .stats-text { font-size: 10px; text-shadow: 2px 2px 0 black; }
+
+        /* --- MOBILE CONTROLS --- */
+        #controls {
+            flex: 1;
+            background: #0a0a15;
+            position: relative;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            border-top: 2px solid #333;
+        }
+
+        .joystick-zone {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #joystick-base {
+            width: 120px; height: 120px;
+            background: rgba(255,255,255,0.05);
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        #joystick-stick {
+            width: 50px; height: 50px;
+            background: #4facfe;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 20px #4facfe;
+        }
+
+        .buttons-zone {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding: 10px;
+        }
+
+        .btn-round {
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 12px;
+            border: 2px solid white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            active { transform: scale(0.9); }
+        }
+
+        .btn-attack { background: #ff4b2b; border-color: #ff9a9e; width: 90px; height: 90px; font-size: 16px; }
+        .btn-potion { background: #00b09b; border-color: #96fbc4; }
+        .btn-god { background: gold; color: black; border-color: #fff; display: none; }
+
+        /* --- SCREENS --- */
+        #menu {
+            position: absolute;
+            inset: 0;
+            background: rgba(5,5,15,0.95);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .btn-start {
+            padding: 15px 40px;
+            background: #4facfe;
+            border: none;
+            color: white;
+            font-family: 'Orbitron';
+            font-size: 20px;
+            border-radius: 30px;
+            margin-top: 20px;
+            box-shadow: 0 0 20px #4facfe;
+        }
+
+        .floating-dmg {
+            position: absolute;
+            pointer-events: none;
+            color: #ff4b2b;
+            font-weight: 900;
+            animation: floatUp 0.6s ease-out forwards;
+        }
+
+        @keyframes floatUp {
+            from { transform: translateY(0); opacity: 1; }
+            to { transform: translateY(-50px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-wrapper">
+        <canvas id="gameCanvas"></canvas>
+
+        <div class="hud">
+            <div class="status-row">
+                <div>
+                    <div class="stats-text">HP: <span id="hpText">100</span></div>
+                    <div class="bar-wrap"><div class="bar-hp" id="hpBar"></div></div>
+                    <div class="stats-text" style="margin-top:8px">XP: LVL <span id="lvlText">1</span></div>
+                    <div class="bar-wrap"><div class="bar-xp" id="xpBar"></div></div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="stats-text" style="color:gold">GOLD: <span id="goldText">0</span></div>
+                    <div class="stats-text">POTIONS: <span id="potText">1</span></div>
+                    <div class="bar-wrap" style="width: 100px; border-color: gold;">
+                        <div class="bar-god" id="godBar"></div>
+                    </div>
+                    <div class="stats-text" style="color:gold; font-size: 8px;">GOD MODE READY</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div class="joystick-zone">
+                <div id="joystick-base">
+                    <div id="joystick-stick"></div>
+                </div>
+            </div>
+            <div class="buttons-zone">
+                <div class="btn-round btn-potion" onclick="usePotion()">POTION</div>
+                <div class="btn-round btn-god" id="godBtn" onclick="useGodSkill()">ULTI</div>
+                <div class="btn-round btn-attack" id="attackBtn">HIT</div>
+            </div>
+        </div>
+
+        <div id="menu">
+            <h1 style="color: #4facfe; font-size: 28px; margin: 0;">ALA RPG</h1>
+            <p style="color: gold; letter-spacing: 5px;">MOBILE GOD</p>
+            <button class="btn-start" onclick="startGame()">START GAME</button>
+            <p style="font-size: 10px; color: #555; margin-top: 30px;">Gunakan Joystick untuk jalan & Tombol HIT untuk hajar!</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const stick = document.getElementById('joystick-stick');
+        const base = document.getElementById('joystick-base');
+
+        // Setup canvas size
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight * 0.6;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- GAME STATE ---
+        const player = {
+            x: canvas.width/2, y: canvas.height/2,
+            size: 25, speed: 4,
+            hp: 100, maxHp: 100,
+            lvl: 1, xp: 0, xpNext: 100,
+            gold: 0, potions: 1,
+            godEnergy: 0,
+            isAttacking: 0,
+            angle: 0,
+            vx: 0, vy: 0
+        };
+
+        let enemies = [];
+        let particles = [];
+        let gameActive = false;
+
+        // --- JOYSTICK LOGIC ---
+        let dragStart = null;
+        let joystickActive = false;
+
+        base.addEventListener('touchstart', (e) => {
+            joystickActive = true;
+            dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!joystickActive) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - dragStart.x;
+            const dy = touch.clientY - dragStart.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const maxLen = 40;
+            
+            const limitedX = (dx / dist) * Math.min(dist, maxLen);
+            const limitedY = (dy / dist) * Math.min(dist, maxLen);
+
+            stick.style.transform = `translate(calc(-50% + ${limitedX}px), calc(-50% + ${limitedY}px))`;
+            
+            player.vx = (limitedX / maxLen) * player.speed;
+            player.vy = (limitedY / maxLen) * player.speed;
+            if(dist > 5) player.angle = Math.atan2(limitedY, limitedX);
+        });
+
+        window.addEventListener('touchend', () => {
+            joystickActive = false;
+            stick.style.transform = `translate(-50%, -50%)`;
+            player.vx = 0; player.vy = 0;
+        });
+
+        // --- ATTACK BUTTON ---
+        document.getElementById('attackBtn').addEventListener('touchstart', (e) => {
+            if(player.isAttacking <= 0) {
+                player.isAttacking = 15;
+                checkHit();
+                if(navigator.vibrate) navigator.vibrate(20);
+            }
+        });
+
+        // --- GAME CORE ---
+        function startGame() {
+            document.getElementById('menu').style.display = 'none';
+            gameActive = true;
+            spawnEnemy();
+            loop();
+        }
+
+        function spawnEnemy() {
+            if(!gameActive) return;
+            const side = Math.floor(Math.random() * 4);
+            let x, y;
+            if(side === 0) { x = Math.random() * canvas.width; y = -30; }
+            else if(side === 1) { x = canvas.width + 30; y = Math.random() * canvas.height; }
+            else if(side === 2) { x = Math.random() * canvas.width; y = canvas.height + 30; }
+            else { x = -30; y = Math.random() * canvas.height; }
+
+            enemies.push({
+                x, y, 
+                size: 20, 
+                hp: 20 + (player.lvl * 10), 
+                speed: 1 + (Math.random()),
+                color: '#ff416c'
+            });
+
+            setTimeout(spawnEnemy, 2000 - (player.lvl * 100));
+        }
+
+        function checkHit() {
+            enemies.forEach((en, i) => {
+                const dx = en.x - (player.x + Math.cos(player.angle) * 30);
+                const dy = en.y - (player.y + Math.sin(player.angle) * 30);
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                
+                if(dist < 50) {
+                    en.hp -= 25;
+                    createFloatingText(en.x, en.y, "-25");
+                    if(en.hp <= 0) {
+                        player.gold += 10;
+                        player.xp += 34;
+                        player.godEnergy = Math.min(player.godEnergy + 20, 100);
+                        enemies.splice(i, 1);
+                        checkLevelUp();
+                    }
+                }
+            });
+        }
+
+        function usePotion() {
+            if(player.potions > 0 && player.hp < player.maxHp) {
+                player.potions--;
+                player.hp = Math.min(player.hp + 40, player.maxHp);
+                if(navigator.vibrate) navigator.vibrate([10, 30]);
+            }
+        }
+
+        function useGodSkill() {
+            if(player.godEnergy >= 100) {
+                player.godEnergy = 0;
+                enemies = []; // Hapus semua musuh (God Power)
+                if(navigator.vibrate) navigator.vibrate(200);
+                // Effect visual
+                canvas.style.filter = "brightness(3)";
+                setTimeout(() => canvas.style.filter = "none", 200);
+            }
+        }
+
+        function checkLevelUp() {
+            if(player.xp >= player.xpNext) {
+                player.lvl++;
+                player.xp = 0;
+                player.maxHp += 20;
+                player.hp = player.maxHp;
+                player.speed += 0.2;
+            }
+        }
+
+        function createFloatingText(x, y, txt) {
+            const div = document.createElement('div');
+            div.className = 'floating-dmg';
+            div.style.left = x + 'px';
+            div.style.top = y + 'px';
+            div.innerText = txt;
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 600);
+        }
+
+        function update() {
+            // Move player
+            player.x += player.vx;
+            player.y += player.vy;
+
+            // Constrain
+            player.x = Math.max(0, Math.min(canvas.width, player.x));
+            player.y = Math.max(0, Math.min(canvas.height, player.y));
+
+            // Enemies
+            enemies.forEach(en => {
+                const dx = player.x - en.x;
+                const dy = player.y - en.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                en.x += (dx/dist) * en.speed;
+                en.y += (dy/dist) * en.speed;
+
+                if(dist < 20) {
+                    player.hp -= 0.5;
+                    if(player.hp <= 0) location.reload();
+                }
+            });
+
+            if(player.isAttacking > 0) player.isAttacking--;
+
+            // Update UI
+            document.getElementById('hpBar').style.width = (player.hp / player.maxHp * 100) + '%';
+            document.getElementById('hpText').innerText = Math.ceil(player.hp);
+            document.getElementById('xpBar').style.width = (player.xp / player.xpNext * 100) + '%';
+            document.getElementById('lvlText').innerText = player.lvl;
+            document.getElementById('goldText').innerText = player.gold;
+            document.getElementById('potText').innerText = player.potions;
+            document.getElementById('godBar').style.width = player.godEnergy + '%';
+            document.getElementById('godBtn').style.display = player.godEnergy >= 100 ? 'flex' : 'none';
+        }
+
+        function draw() {
+            ctx.clearRect(0,0, canvas.width, canvas.height);
+
+            // Draw Attack Range if attacking
+            if(player.isAttacking > 0) {
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.beginPath();
+                ctx.arc(player.x + Math.cos(player.angle)*30, player.y + Math.sin(player.angle)*30, 40, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Draw Player
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#4facfe';
+            ctx.fillStyle = '#4facfe';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.size/2, 0, Math.PI*2);
+            ctx.fill();
+
+            // Eyes (Direction indicator)
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(player.x + Math.cos(player.angle)*8, player.y + Math.sin(player.angle)*8, 3, 0, Math.PI*2);
+            ctx.fill();
+
+            // Draw Enemies
+            ctx.shadowColor = '#ff416c';
+            enemies.forEach(en => {
+                ctx.fillStyle = en.color;
+                ctx.beginPath();
+                ctx.moveTo(en.x, en.y - 10);
+                ctx.lineTo(en.x + 10, en.y + 10);
+                ctx.lineTo(en.x - 10, en.y + 10);
+                ctx.fill();
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        function loop() {
+            if(!gameActive) return;
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+    </script>
+</body>
+</html>
